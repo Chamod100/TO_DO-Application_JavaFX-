@@ -1,88 +1,73 @@
 package org.example.repository;
 
-import dbConnection.DBConnection;
-import dto.TaskDTO;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import org.example.dbConnection.DBConnection;
+import org.example.dto.TaskDTO;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.List;
 
 public class AppRepository {
 
-    ObservableList<TaskDTO> completeTask = FXCollections.observableArrayList();
-
-    public int getLastId() throws SQLException {
-        PreparedStatement preparedStatement = DBConnection.getInstance().getConnection().prepareStatement("SELECT id FROM task ORDER BY id DESC LIMIT 1");
-        ResultSet resultSet = preparedStatement.executeQuery();
-        if (resultSet.next()) {
-            return resultSet.getInt("id")+1;
+    public List<TaskDTO> getAllPendingTasks() throws SQLException {
+        ObservableList<TaskDTO> list = FXCollections.observableArrayList();
+        Connection connection = DBConnection.getInstance().getConnection();
+        ResultSet resultSet = connection.createStatement().executeQuery("SELECT * FROM task");
+        while (resultSet.next()) {
+            list.add(new TaskDTO(resultSet.getInt("id"), resultSet.getString("title"), resultSet.getString("date"), resultSet.getString("description")));
         }
-        return 0;
-    }
-
-    public void addTask(TaskDTO taskDTO) throws SQLException {
-        PreparedStatement preparedStatement = DBConnection.getInstance()
-                .getConnection()
-                .prepareStatement("INSERT INTO task (title, date, description) VALUES ( ? , ? , ? )");
-
-        preparedStatement.setString(1, taskDTO.getTitle());
-        preparedStatement.setString(2, taskDTO.getDate());
-        preparedStatement.setString(3, taskDTO.getDescription());
-        preparedStatement.executeUpdate();
+        return list;
     }
 
     public ObservableList<TaskDTO> getAllComplete() throws SQLException {
-        PreparedStatement preparedStatement = DBConnection.getInstance().getConnection().prepareStatement("SELECT * FROM completeTask");
-        ResultSet resultSet = preparedStatement.executeQuery();
+        ObservableList<TaskDTO> completeList = FXCollections.observableArrayList();
+        Connection connection = DBConnection.getInstance().getConnection();
+        ResultSet resultSet = connection.createStatement().executeQuery("SELECT * FROM completetask");
         while (resultSet.next()) {
-            completeTask.add(new TaskDTO(
-                            resultSet.getInt("id"),
-                            resultSet.getString("title"),
-                            resultSet.getString("date"),
-                            resultSet.getString("description")
-                    )
-            );
+            completeList.add(new TaskDTO(resultSet.getInt("id"), resultSet.getString("title"), resultSet.getString("date"), resultSet.getString("description")));
         }
-        return completeTask;
+        return completeList;
+    }
+
+    public void addTask(TaskDTO taskDTO) throws SQLException {
+        PreparedStatement pstm = DBConnection.getInstance().getConnection().prepareStatement("INSERT INTO task (title, date, description) VALUES (?, ?, ?)");
+        pstm.setString(1, taskDTO.getTitle());
+        pstm.setString(2, taskDTO.getDate());
+        pstm.setString(3, taskDTO.getDescription());
+        pstm.executeUpdate();
     }
 
     public void getCompleteTask(List<Integer> intList) throws SQLException {
         Connection connection = DBConnection.getInstance().getConnection();
-        for (int i = 0; i < intList.size(); i++) {
-            PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM task  where id = ?");
-            System.out.println(intList.get(i));
-            preparedStatement.setInt(1, intList.get(i));
-            ResultSet resultSet = preparedStatement.executeQuery();
-            while (resultSet.next()) {
-                TaskDTO taskDTO = new TaskDTO(
-                        resultSet.getInt("id"),
-                        resultSet.getString("title"),
-                        resultSet.getString("date"),
-                        resultSet.getString("description")
-                );
-                addCompleteTask(taskDTO);
+        for (Integer id : intList) {
+            PreparedStatement selectPstm = connection.prepareStatement("SELECT * FROM task WHERE id = ?");
+            selectPstm.setInt(1, id);
+            ResultSet resultSet = selectPstm.executeQuery();
+            if (resultSet.next()) {
+                TaskDTO task = new TaskDTO(resultSet.getInt("id"), resultSet.getString("title"), resultSet.getString("date"), resultSet.getString("description"));
+
+                PreparedStatement insertPstm = connection.prepareStatement("INSERT INTO completetask (title, date, description) VALUES (?, ?, ?)");
+                insertPstm.setString(1, task.getTitle());
+                insertPstm.setString(2, task.getDate());
+                insertPstm.setString(3, task.getDescription());
+                insertPstm.executeUpdate();
+
+                PreparedStatement deletePstm = connection.prepareStatement("DELETE FROM task WHERE id = ?");
+                deletePstm.setInt(1, id);
+                deletePstm.executeUpdate();
             }
         }
     }
 
-    private void addCompleteTask(TaskDTO taskDTO) throws SQLException {
-        PreparedStatement preparedStatement = DBConnection.getInstance()
-                .getConnection()
-                .prepareStatement("INSERT INTO completetask (title, date, description) VALUES ( ? , ? , ? )");
-
-        preparedStatement.setString(1, taskDTO.getTitle());
-        preparedStatement.setString(2, taskDTO.getDate());
-        preparedStatement.setString(3, taskDTO.getDescription());
-        preparedStatement.executeUpdate();
+    public void deleteHistory(TaskDTO selectedItem) throws SQLException {
+        PreparedStatement pstm = DBConnection.getInstance().getConnection().prepareStatement("DELETE FROM completetask WHERE id = ?");
+        pstm.setInt(1, selectedItem.getId());
+        pstm.executeUpdate();
     }
 
-    public void deleteHistory(TaskDTO selectedItem) throws SQLException {
-        PreparedStatement preparedStatement = DBConnection.getInstance().getConnection().prepareStatement("DELETE FROM completeTask WHERE id = ?");
-        preparedStatement.setInt(1,selectedItem.getId());
-        preparedStatement.executeUpdate();
+    public int getLastId() throws SQLException {
+        ResultSet resultSet = DBConnection.getInstance().getConnection().createStatement().executeQuery("SELECT id FROM task ORDER BY id DESC LIMIT 1");
+        return resultSet.next() ? resultSet.getInt("id") + 1 : 1;
     }
 }
